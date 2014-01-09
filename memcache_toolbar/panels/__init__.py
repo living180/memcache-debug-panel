@@ -1,16 +1,20 @@
 # work around modules with the same name
 from __future__ import absolute_import
 
-from datetime import datetime
-from debug_toolbar.panels import DebugPanel
-from django.conf import settings
-from django.template.loader import render_to_string
-from django.utils.translation import ugettext_lazy as _
-from os.path import dirname, realpath
-import django
 import logging
 import SocketServer
 import traceback
+
+from datetime import datetime
+from os.path import dirname, realpath
+
+import django
+
+from django.conf import settings
+from django.template.loader import render_to_string
+from django.utils.translation import ugettext_lazy as _
+
+from debug_toolbar.panels import DebugPanel
 
 
 logger = logging.getLogger(__name__)
