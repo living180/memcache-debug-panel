@@ -9,9 +9,9 @@ setup(
     author='Ross McFarland',
     author_email='rwmcfa1@neces.com',
     url='http://github.com/ross/memcache-debug-panel',
-    packages=find_packages(exclude=('examples', 'examples.demo', 'test')),
+    packages=find_packages(exclude=('example', 'demo')),
     provides=['memcache_toolbar'],
-    requires=['Django', 'debug_toolbar'],
+    requires=['Django>=1.4', 'debug_toolbar>=1.0'],
     include_package_data=True,
     zip_safe=False,
 )

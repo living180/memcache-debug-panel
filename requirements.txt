@@ -1,4 +1,4 @@
-Django
-django-debug-toolbar
+Django>=1.4
+django-debug-toolbar>=1.0
 pylibmc
 python-memcached

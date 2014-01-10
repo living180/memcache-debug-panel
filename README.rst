@@ -15,21 +15,6 @@ Installation
 
 #. Add the ``memcache_toolbar`` app to your ``INSTALLED_APPS``.
 
-#. Import the panel corresponding to the library you're using.
-
-   The following must be imported in your ``settings.py`` file so that it has a
-   chance to replace the caching library with one capable of tracking. You'll
-   probably want to import it in ``local_settings.py`` (if you use the pattern) or
-   at least wrap the import line in ``if DEBUG``:
-
-   For ``memcache``::
-
-	import memcache_toolbar.panels.memcache
-
-   For ``pylibmc``::
-
-	import memcache_toolbar.panels.pylibmc
-
 Configuration
 =============
 

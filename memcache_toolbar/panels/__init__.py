@@ -1,134 +1,76 @@
-# work around modules with the same name
 from __future__ import absolute_import
 
-import logging
-import SocketServer
+import collections
+import time
 import traceback
 
-from datetime import datetime
-from os.path import dirname, realpath
-
-import django
-
-from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext_lazy as _
 
-from debug_toolbar.panels import DebugPanel
+from debug_toolbar import settings as dt_settings
+from debug_toolbar.panels import Panel
+from debug_toolbar.utils import get_stack, render_stacktrace, tidy_stacktrace
 
 
-logger = logging.getLogger(__name__)
+class BasePanel(Panel):
+    template = 'memcache_toolbar/panels/memcache.html'
 
-class Calls:
-    def __init__(self):
-        self.reset()
+    def __init__(self, *args, **kwargs):
+        super(BasePanel, self).__init__(*args, **kwargs)
+        self.calls = []
+        self.total_time = 0
 
-    def reset(self):
-        self._calls = []
+    def enable_instrumentation(self):
+        self.client_wrapper.install_recorder(self._recorder)
 
-    def append(self, call):
-        self._calls.append(call)
+    def disable_instrumentation(self):
+        self.client_wrapper.remove_recorder()
 
-    def calls(self):
-        return self._calls
+    def process_response(self, request, response):
+        self.record_stats({'calls': self.calls, 'total_time': self.total_time})
 
-    def size(self):
-        return len(self._calls)
-
-    def last(self):
-        return self._calls[-1]
-
-# NOTE this is not even close to thread-safe/aware
-instance = Calls()
-
-# based on the function with the same name in ddt's sql, i'd rather just use it
-# than copy it, but i can't import it without things blowing up
-django_path = realpath(dirname(django.__file__))
-socketserver_path = realpath(dirname(SocketServer.__file__))
-def tidy_stacktrace(strace):
-    trace = []
-    for s in strace[:-1]:
-        s_path = realpath(s[0])
-        if getattr(settings, 'DEBUG_TOOLBAR_CONFIG', {}).get('HIDE_DJANGO_SQL', True) \
-            and django_path in s_path and not 'django/contrib' in s_path:
-            continue
-        if socketserver_path in s_path:
-            continue
-        trace.append((s[0], s[1], s[2], s[3]))
-    return trace
-
-def record(func):
-    def recorder(*args, **kwargs):
-        stacktrace = tidy_stacktrace(traceback.extract_stack())
-        call = {'function': func.__name__, 'args': None, 
-                'stacktrace': stacktrace}
-        instance.append(call)
-        # the try here is just being extra safe, it should not happen
-        try:
-            a = None
-            # first arg is self, do we have another
-            if len(args) > 1:
-                a = args[1]
-                # is it a dictionary (most likely multi)
-                if isinstance(a, dict):
-                    # just use it's keys
-                    a = a.keys()
-            # store the args
-            call['args'] = a
-        except e:
-            logger.exception('tracking of call args failed')
-        ret = None
-        try:
-            # the clock starts now
-            call['start'] = datetime.now()
-            ret = func(*args, **kwargs)
-        finally:
-            # the clock stops now
-            dur = datetime.now() - call['start']
-            call['duration'] = (dur.seconds * 1000) + (dur.microseconds / 1000.0)
-        return ret
-    return recorder
-
-
-class BasePanel(DebugPanel):
-    name = 'Memcache'
-    has_content = True
-
-    def process_request(self, request):
-        instance.reset()
-
-    def nav_title(self):
-        return _('Memcache')
-
-    def nav_subtitle(self):
-        duration = 0
-        calls = instance.calls()
-        for call in calls:
-            duration += call['duration']
-        n = len(calls)
-        if (n > 0):
-            return "%d calls, %0.2fms" % (n, duration)
-        else:
-            return "0 calls"
+    @property
+    def has_content(self):
+        return bool(self.calls)
 
     def title(self):
         return _('Memcache Calls')
 
-    def url(self):
-        return ''
+    def nav_title(self):
+        return 'Memcache'
 
-    def content(self):
-        duration = 0
-        calls = instance.calls()
-        for call in calls:
-            duration += call['duration']
+    def nav_subtitle(self):
+        n = len(self.calls)
+        if n == 0:
+            return _("0 calls")
+        elif n == 1:
+            return _("1 call in {:0.2f}ms").format(self.total_time)
+        else:
+            return _("{} calls in {:0.2f}ms").format(n, self.total_time)
 
-        context = self.context.copy()
-        context.update({
-            'calls': calls,
-            'count': len(calls),
-            'duration': duration,
-        })
+    def _recorder(self, func, name, *args, **kwargs):
+        if dt_settings.CONFIG['ENABLE_STACKTRACES']:
+            stacktrace = tidy_stacktrace(reversed(get_stack()))[:-2]
+        else:
+            stacktrace = []
+        if len(args) > 1:
+            keys = args[1]
+            if isinstance(args[1], collections.Mapping):
+                # if the first argument is a mapping object (e.g. a dict) it is
+                # probably for a *multi call and the keys are the keys from the
+                # dictionary
+                keys = args[1].keys()
+            else:
+                # else the key is just the first argument
+                keys = args[1]
+        else:
+            keys = None
+        try:
+            start = time.time()
+            result = func(*args, **kwargs)
+        finally:
+            elapsed = time.time() - start
+            self.calls.append({'name': name, 'keys': keys, 'trace': render_stacktrace(stacktrace), 'time': elapsed})
+            self.total_time += elapsed
 
-        return render_to_string('memcache_toolbar/panels/memcache.html',
-                context)
+        return result
