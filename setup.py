@@ -11,7 +11,7 @@ setup(
     url='http://github.com/ross/memcache-debug-panel',
     packages=find_packages(exclude=('example', 'demo')),
     provides=['memcache_toolbar'],
-    requires=['Django>=1.4', 'debug_toolbar>=1.0'],
+    install_requires=['Django>=1.4', 'django-debug-toolbar>=1.0'],
     include_package_data=True,
     zip_safe=False,
 )
