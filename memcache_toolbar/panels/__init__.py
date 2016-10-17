@@ -7,7 +7,13 @@ import traceback
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext_lazy as _
 
-from debug_toolbar import settings as dt_settings
+try:
+    from debug_toolbar.settings import get_config as get_dt_config
+except ImportError:
+    from debug_toolbar.settings import CONFIG as DT_CONFIG
+    def get_dt_config():
+        return DT_CONFIG
+
 from debug_toolbar.panels import Panel
 from debug_toolbar.utils import get_stack, render_stacktrace, tidy_stacktrace
 
@@ -49,7 +55,7 @@ class BasePanel(Panel):
             return _("{} calls in {:0.2f}ms").format(n, self.total_time)
 
     def _recorder(self, func, name, *args, **kwargs):
-        if dt_settings.CONFIG['ENABLE_STACKTRACES']:
+        if get_dt_config()['ENABLE_STACKTRACES']:
             stacktrace = tidy_stacktrace(reversed(get_stack()))[:-2]
         else:
             stacktrace = []
